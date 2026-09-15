@@ -24,6 +24,27 @@ from src.rag.vectorstore import index_chunks, retrieve
 logger = logging.getLogger(__name__)
 
 
+def _safe_extract_field(
+    field: FieldSpec, entity_label: str, chunks: list[dict], entity_id: str
+) -> FieldExtraction:
+    """Runs extract_field but never lets a provider error (rate limit,
+    timeout, auth hiccup) crash the whole batch -- a persistent 429 on
+    entity 8 of 1000 should degrade that one field, not throw away the
+    other 999 entities' results."""
+    try:
+        return extract_field(field, entity_label, chunks)
+    except Exception as exc:
+        logger.error(
+            "%s: extraction call failed for field=%s (%s: %s) -- flagging "
+            "for review instead of aborting the batch",
+            entity_id,
+            field.name,
+            type(exc).__name__,
+            exc,
+        )
+        return FieldExtraction(value=None, confidence=0.0, citation="", needs_review=True)
+
+
 def ingest_entity(entity: EntityInput, raw_dir: Path, force: bool = False) -> int:
     """Fetches and caches raw documents for one entity. Returns doc count."""
     if not force and has_documents(entity.entity_id, raw_dir):
@@ -105,7 +126,7 @@ def _retry_field_with_targeted_search(
         field.name,
         new_docs,
     )
-    return extract_field(field, entity_label, chunks)
+    return _safe_extract_field(field, entity_label, chunks, entity.entity_id)
 
 
 def extract_entity_profile(
@@ -121,12 +142,24 @@ def extract_entity_profile(
     for field in schema.fields:
         query = f"{field.name}: {field.source_hint or field.name}"
         chunks = retrieve(entity.entity_id, query, top_k=top_k, index_dir=index_dir)
-        result: FieldExtraction = extract_field(field, entity_label, chunks)
+        result: FieldExtraction = _safe_extract_field(
+            field, entity_label, chunks, entity.entity_id
+        )
 
         if result.value is None or result.confidence < schema.confidence_threshold:
-            retried = _retry_field_with_targeted_search(
-                entity, field, entity_label, raw_dir, index_dir, top_k
-            )
+            try:
+                retried = _retry_field_with_targeted_search(
+                    entity, field, entity_label, raw_dir, index_dir, top_k
+                )
+            except Exception as exc:
+                logger.error(
+                    "%s: retry search/extraction failed for field=%s (%s: %s)",
+                    entity.entity_id,
+                    field.name,
+                    type(exc).__name__,
+                    exc,
+                )
+                retried = None
             if retried is not None:
                 result = retried
 

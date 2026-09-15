@@ -76,6 +76,28 @@ def test_retry_finds_nothing_keeps_original_low_confidence_result(monkeypatch, t
     assert profile.fields["revenue"].needs_review is True
 
 
+def test_extraction_exception_degrades_to_needs_review_instead_of_crashing(
+    monkeypatch, tmp_path
+):
+    raw_dir = tmp_path / "raw"
+    index_dir = tmp_path / "index"
+
+    monkeypatch.setattr(orchestrator, "retrieve", lambda *a, **k: [])
+
+    def raises(field, entity_label, chunks):
+        raise RuntimeError("simulated rate limit / provider failure")
+
+    monkeypatch.setattr(orchestrator, "extract_field", raises)
+    monkeypatch.setattr(orchestrator, "search_for_field", lambda entity, name, hint: [])
+
+    # Must not raise -- a single field's provider failure should degrade,
+    # not propagate and abort the whole entity/batch.
+    profile = orchestrator.extract_entity_profile(_entity(), _schema(), raw_dir, index_dir)
+
+    assert profile.fields["revenue"].value is None
+    assert profile.fields["revenue"].needs_review is True
+
+
 def test_high_confidence_first_pass_skips_retry(monkeypatch, tmp_path):
     raw_dir = tmp_path / "raw"
     index_dir = tmp_path / "index"

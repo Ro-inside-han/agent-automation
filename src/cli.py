@@ -52,21 +52,58 @@ def cmd_index(args: argparse.Namespace) -> None:
         logger.info("%s: %d chunks indexed", entity.entity_id, n_chunks)
 
 
+def _load_cached_profiles() -> dict[str, EntityProfile]:
+    if not PROFILES_CACHE.exists():
+        return {}
+    with open(PROFILES_CACHE, "rb") as f:
+        return {p.entity_id: p for p in pickle.load(f)}
+
+
+def _save_cached_profiles(profiles_by_id: dict[str, EntityProfile]) -> None:
+    PROFILES_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    with open(PROFILES_CACHE, "wb") as f:
+        pickle.dump(list(profiles_by_id.values()), f)
+
+
 def cmd_extract(args: argparse.Namespace) -> None:
     schema = load_schema(args.schema)
     entities = load_entities(args.input)
 
-    profiles: list[EntityProfile] = []
-    for entity in tqdm(entities, desc="extract"):
-        profile = extract_entity_profile(
-            entity, schema, RAW_DIR, INDEX_DIR, top_k=args.top_k
+    # Resumable + incrementally saved: a crash (e.g. a persistent rate
+    # limit) on entity 8 of 1000 must not throw away entities 1-7's work,
+    # and re-running `extract` should pick up where it left off rather than
+    # re-spend API calls on entities already done.
+    profiles_by_id = _load_cached_profiles()
+    if profiles_by_id:
+        logger.info(
+            "Resuming: %d entities already extracted in a prior run",
+            len(profiles_by_id),
         )
-        profiles.append(profile)
 
-    PROFILES_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    with open(PROFILES_CACHE, "wb") as f:
-        pickle.dump(profiles, f)
-    logger.info("Extracted %d profiles -> %s", len(profiles), PROFILES_CACHE)
+    for entity in tqdm(entities, desc="extract"):
+        if entity.entity_id in profiles_by_id and not args.force:
+            continue
+        try:
+            profile = extract_entity_profile(
+                entity, schema, RAW_DIR, INDEX_DIR, top_k=args.top_k
+            )
+        except Exception as exc:
+            logger.error(
+                "%s: extraction aborted for this entity (%s: %s) -- skipping "
+                "it, other entities' results are preserved. Re-run `extract` "
+                "later to retry just this one.",
+                entity.entity_id,
+                type(exc).__name__,
+                exc,
+            )
+            continue
+
+        profiles_by_id[entity.entity_id] = profile
+        _save_cached_profiles(profiles_by_id)
+
+    logger.info(
+        "Extracted %d profiles total -> %s", len(profiles_by_id), PROFILES_CACHE
+    )
 
 
 def cmd_export(args: argparse.Namespace) -> None:
@@ -103,6 +140,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_extract = sub.add_parser("extract", parents=[common])
     p_extract.add_argument("--schema", default="config/schema.yaml")
     p_extract.add_argument("--top-k", type=int, default=5)
+    p_extract.add_argument(
+        "--force", action="store_true", help="re-extract even if already cached"
+    )
     p_extract.set_defaults(func=cmd_extract)
 
     p_export = sub.add_parser("export")

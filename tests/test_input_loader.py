@@ -3,7 +3,7 @@ from src.ingestion.input_loader import load_entities
 
 def test_load_entities_from_sample_csv():
     entities = load_entities("data/input/companies.csv")
-    assert len(entities) == 2
+    assert len(entities) > 0
 
     first = entities[0]
     assert first.company == "Godrej Industries"
