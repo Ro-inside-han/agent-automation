@@ -48,7 +48,10 @@ src/
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # fill in ANTHROPIC_API_KEY and (optional) TAVILY_API_KEY
+cp .env.example .env
+# fill in TAVILY_API_KEY (optional, see above), and an LLM provider:
+#   LLM_PROVIDER=anthropic + ANTHROPIC_API_KEY  (paid, best quality), or
+#   LLM_PROVIDER=groq      + GROQ_API_KEY       (free tier, console.groq.com)
 ```
 
 ## Usage

@@ -1,39 +1,43 @@
 """Extraction agent: turns retrieved chunks into one structured field value.
 
-Uses Claude tool-calling so the model is forced to return a value +
+Uses tool/function-calling so the model is forced to return a value +
 confidence + citation instead of free text, which is what makes the output
-auditable (a jury/client can trace every cell back to a source).
+auditable (a jury/client can trace every cell back to a source). Supports
+two interchangeable providers, picked via the LLM_PROVIDER env var:
+
+- "anthropic" (default): Claude, paid API credits required.
+- "groq": free-tier API (console.groq.com) running open models (e.g.
+  Llama 3.3), good for a no-budget pilot before paying for Anthropic.
 """
 from __future__ import annotations
 
+import json
 import os
 
 from src.config import FieldSpec
 from src.models import FieldExtraction
 
-_TOOL = {
-    "name": "record_field",
-    "description": "Record the extracted value for one profiling field.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "value": {
-                "description": "The extracted value. Use null if it cannot "
-                "be determined from the provided context.",
-            },
-            "confidence": {
-                "type": "number",
-                "description": "0.0-1.0 confidence that the value is correct "
-                "and well-supported by the given context.",
-            },
-            "citation": {
-                "type": "string",
-                "description": "Which source URL(s)/titles from the context "
-                "support this value. Empty string if value is null.",
-            },
+_TOOL_NAME = "record_field"
+_TOOL_DESCRIPTION = "Record the extracted value for one profiling field."
+_TOOL_PARAMETERS = {
+    "type": "object",
+    "properties": {
+        "value": {
+            "description": "The extracted value. Use null if it cannot "
+            "be determined from the provided context.",
         },
-        "required": ["value", "confidence", "citation"],
+        "confidence": {
+            "type": "number",
+            "description": "0.0-1.0 confidence that the value is correct "
+            "and well-supported by the given context.",
+        },
+        "citation": {
+            "type": "string",
+            "description": "Which source URL(s)/titles from the context "
+            "support this value. Empty string if value is null.",
+        },
     },
+    "required": ["value", "confidence", "citation"],
 }
 
 
@@ -67,26 +71,74 @@ value. If the context does not support a confident answer, set value to
 null and confidence to a low number rather than guessing."""
 
 
-def extract_field(
-    field: FieldSpec, entity_label: str, context_chunks: list[dict]
-) -> FieldExtraction:
+def _call_anthropic(prompt: str) -> dict:
     from anthropic import Anthropic
 
     client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5")
 
-    prompt = _build_prompt(field, entity_label, context_chunks)
-
     response = client.messages.create(
         model=model,
         max_tokens=500,
-        tools=[_TOOL],
-        tool_choice={"type": "tool", "name": "record_field"},
+        tools=[
+            {
+                "name": _TOOL_NAME,
+                "description": _TOOL_DESCRIPTION,
+                "input_schema": _TOOL_PARAMETERS,
+            }
+        ],
+        tool_choice={"type": "tool", "name": _TOOL_NAME},
         messages=[{"role": "user", "content": prompt}],
     )
 
     tool_use = next(b for b in response.content if b.type == "tool_use")
-    result = tool_use.input
+    return tool_use.input
+
+
+def _call_groq(prompt: str) -> dict:
+    from groq import Groq
+
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": _TOOL_NAME,
+                    "description": _TOOL_DESCRIPTION,
+                    "parameters": _TOOL_PARAMETERS,
+                },
+            }
+        ],
+        tool_choice={"type": "function", "function": {"name": _TOOL_NAME}},
+    )
+
+    tool_call = response.choices[0].message.tool_calls[0]
+    return json.loads(tool_call.function.arguments)
+
+
+_PROVIDERS = {
+    "anthropic": _call_anthropic,
+    "groq": _call_groq,
+}
+
+
+def extract_field(
+    field: FieldSpec, entity_label: str, context_chunks: list[dict]
+) -> FieldExtraction:
+    provider = os.getenv("LLM_PROVIDER", "anthropic").lower()
+    call = _PROVIDERS.get(provider)
+    if call is None:
+        raise ValueError(
+            f"Unknown LLM_PROVIDER={provider!r}; expected one of {sorted(_PROVIDERS)}"
+        )
+
+    prompt = _build_prompt(field, entity_label, context_chunks)
+    result = call(prompt)
 
     value = result.get("value")
     confidence = float(result.get("confidence", 0.0))
