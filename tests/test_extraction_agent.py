@@ -1,9 +1,28 @@
 from src.agents import extraction_agent
+from src.agents.extraction_agent import _MAX_CHARS_PER_CHUNK, _build_prompt
 from src.config import FieldSpec
 
 
 def _field() -> FieldSpec:
     return FieldSpec(name="revenue", type="number", unit="INR crore")
+
+
+def test_build_prompt_truncates_oversized_chunks():
+    huge_chunk = {"text": "x" * (_MAX_CHARS_PER_CHUNK * 3), "source_url": "https://x"}
+
+    prompt = _build_prompt(_field(), "Acme / Acme Ltd", [huge_chunk])
+
+    assert len(prompt) < _MAX_CHARS_PER_CHUNK * 2
+    assert "[truncated]" in prompt
+
+
+def test_build_prompt_leaves_short_chunks_untouched():
+    chunk = {"text": "Revenue was 500 crore.", "source_url": "https://x"}
+
+    prompt = _build_prompt(_field(), "Acme / Acme Ltd", [chunk])
+
+    assert "Revenue was 500 crore." in prompt
+    assert "[truncated]" not in prompt
 
 
 def test_extract_field_uses_configured_provider(monkeypatch):

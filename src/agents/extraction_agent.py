@@ -41,15 +41,25 @@ _TOOL_PARAMETERS = {
 }
 
 
+# Caps how much retrieved text goes into one prompt. PDF-extracted text
+# (annual reports, CSR policy PDFs) tokenizes far less efficiently than
+# normal prose -- a handful of "800-word" chunks can blow past free-tier
+# token-per-minute limits even though the word count looks small.
+_MAX_CHARS_PER_CHUNK = 1200
+
+
 def _build_prompt(field: FieldSpec, entity_label: str, context_chunks: list[dict]) -> str:
     if not context_chunks:
         context_block = "(no retrieved context available)"
     else:
-        context_block = "\n\n".join(
-            f"[Source: {c.get('source_title', c.get('source_url', 'unknown'))} "
-            f"| {c.get('source_url', '')}]\n{c['text']}"
-            for c in context_chunks
-        )
+        parts = []
+        for c in context_chunks:
+            text = c["text"]
+            if len(text) > _MAX_CHARS_PER_CHUNK:
+                text = text[:_MAX_CHARS_PER_CHUNK] + " ...[truncated]"
+            source = c.get("source_title", c.get("source_url", "unknown"))
+            parts.append(f"[Source: {source} | {c.get('source_url', '')}]\n{text}")
+        context_block = "\n\n".join(parts)
 
     constraints = []
     if field.type == "number" and field.unit:
