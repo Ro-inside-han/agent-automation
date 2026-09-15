@@ -58,7 +58,9 @@ def cmd_extract(args: argparse.Namespace) -> None:
 
     profiles: list[EntityProfile] = []
     for entity in tqdm(entities, desc="extract"):
-        profile = extract_entity_profile(entity, schema, INDEX_DIR, top_k=args.top_k)
+        profile = extract_entity_profile(
+            entity, schema, RAW_DIR, INDEX_DIR, top_k=args.top_k
+        )
         profiles.append(profile)
 
     PROFILES_CACHE.parent.mkdir(parents=True, exist_ok=True)
