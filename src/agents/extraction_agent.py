@@ -109,6 +109,7 @@ def _call_groq(prompt: str) -> dict:
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
+        max_completion_tokens=500,
         tools=[
             {
                 "type": "function",
