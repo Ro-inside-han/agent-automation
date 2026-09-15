@@ -29,7 +29,7 @@ class SchemaConfig:
 
 def load_schema(path: str | Path) -> SchemaConfig:
     path = Path(path)
-    raw = yaml.safe_load(path.read_text())
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
 
     fields = [
         FieldSpec(

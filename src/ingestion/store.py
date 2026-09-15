@@ -27,7 +27,9 @@ def _doc_path(raw_dir: Path, doc: RawDocument) -> Path:
 
 def save_document(doc: RawDocument, raw_dir: Path = DEFAULT_RAW_DIR) -> Path:
     path = _doc_path(raw_dir, doc)
-    path.write_text(json.dumps(asdict(doc), ensure_ascii=False, indent=2))
+    path.write_text(
+        json.dumps(asdict(doc), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return path
 
 
@@ -37,7 +39,7 @@ def load_documents(entity_id: str, raw_dir: Path = DEFAULT_RAW_DIR) -> list[RawD
         return []
     docs = []
     for path in entity_dir.glob("*.json"):
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         docs.append(RawDocument(**data))
     return docs
 
