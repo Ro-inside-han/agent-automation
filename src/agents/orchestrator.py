@@ -28,12 +28,29 @@ def ingest_entity(entity: EntityInput, raw_dir: Path, force: bool = False) -> in
         return len(load_documents(entity.entity_id, raw_dir))
 
     urls = search_entity(entity)
+    if not urls:
+        logger.warning(
+            "%s: search returned no candidate URLs (no TAVILY_API_KEY / no "
+            "search results / no seed_urls)",
+            entity.entity_id,
+        )
+        return 0
+
     saved = 0
     for url in urls:
         doc = fetch_document(entity.entity_id, url)
         if doc:
             save_document(doc, raw_dir)
             saved += 1
+        else:
+            logger.warning("%s: failed to fetch/parse %s", entity.entity_id, url)
+
+    if saved == 0:
+        logger.warning(
+            "%s: found %d candidate URL(s) but none could be scraped",
+            entity.entity_id,
+            len(urls),
+        )
     return saved
 
 
