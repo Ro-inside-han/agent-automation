@@ -1,0 +1,64 @@
+# Schema for the profiling deliverable.
+# This is the ONLY file that should change between client projects — the
+# pipeline code reads this to know what to extract, how to search for it,
+# and how confident it needs to be before flagging a field for review.
+
+project_name: "Family Business Leader Profiling"
+confidence_threshold: 0.6   # fields scoring below this are flagged needs_review
+
+fields:
+  - name: leader_name
+    type: string
+    required: true
+    source_hint: >
+      Official name of the family business leader / promoter as it appears
+      on the company website, annual report, or LinkedIn profile.
+
+  - name: company_name
+    type: string
+    required: true
+    source_hint: >
+      Legal or commonly used name of the company the leader heads or is
+      the promoter/director of.
+
+  - name: family_name
+    type: string
+    required: true
+    source_hint: >
+      Surname / family name associated with the business (e.g. the
+      "Godrej" in Godrej Group). Derive from company history, founder
+      lineage, or succession coverage if not explicitly stated.
+
+  - name: revenue
+    type: number
+    required: true
+    unit: INR crore
+    source_hint: >
+      Most recent annual revenue / turnover figure, from annual report,
+      MCA filing, or credible business news. Prefer the latest fiscal
+      year available and note the year in the citation.
+
+  - name: csr_activities
+    type: text_summary
+    required: false
+    max_words: 80
+    source_hint: >
+      Summary of CSR (Corporate Social Responsibility) initiatives:
+      focus areas, notable programs, CSR spend if disclosed.
+
+  - name: key_developments
+    type: text_summary
+    required: false
+    max_words: 80
+    source_hint: >
+      Notable recent developments: expansions, acquisitions, leadership
+      succession, new product/market launches, funding, restructuring
+      (last ~24 months preferred).
+
+  - name: governance_notes
+    type: text_summary
+    required: false
+    max_words: 60
+    source_hint: >
+      Board independence, succession planning status, and any formal
+      governance structures (family council, board charter, etc.).
