@@ -96,10 +96,15 @@ def _call_anthropic(prompt: str) -> dict:
 
 
 def _call_groq(prompt: str) -> dict:
+    # Groq's model lineup changes over time (models get deprecated/renamed).
+    # If GROQ_MODEL 404s, list what your key currently has access to:
+    #   curl -H "Authorization: Bearer $GROQ_API_KEY" \
+    #     https://api.groq.com/openai/v1/models
+    # and pick one with "tools" in supported_features.
     from groq import Groq
 
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
     response = client.chat.completions.create(
         model=model,
