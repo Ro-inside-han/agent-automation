@@ -13,21 +13,15 @@ from src.models import EntityInput
 
 DEFAULT_QUERIES = [
     '"{company}" company profile revenue',
-    '"{company}" CSR activities',
-    '"{company}" news recent developments',
-    '"{leader}" "{company}" leadership',
+    '"{company}" CSR activities news recent developments',
 ]
 
 
 def build_queries(entity: EntityInput) -> list[str]:
-    queries = []
-    for template in DEFAULT_QUERIES:
-        if "{leader}" in template and not entity.leader_name:
-            continue
-        queries.append(
-            template.format(company=entity.company, leader=entity.leader_name)
-        )
-    return queries
+    return [
+        template.format(company=entity.company, leader=entity.leader_name)
+        for template in DEFAULT_QUERIES
+    ]
 
 
 def search_entity(entity: EntityInput, max_results_per_query: int = 4) -> list[str]:
