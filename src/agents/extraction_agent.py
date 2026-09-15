@@ -116,10 +116,24 @@ def _call_groq(prompt: str) -> dict:
     client = Groq(api_key=os.environ["GROQ_API_KEY"])
     model = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
+    kwargs = {}
+    if model.startswith("openai/gpt-oss"):
+        # These are reasoning models: they spend output tokens on internal
+        # chain-of-thought before emitting the tool call. A tight
+        # max_completion_tokens can exhaust the budget on reasoning alone,
+        # leaving no tool call at all (400 tool_use_failed, empty
+        # failed_generation). reasoning_effort="low" curbs that spend, and
+        # the higher cap leaves room for reasoning + the actual call.
+        # Other Groq models don't accept reasoning_effort, so this is
+        # scoped to gpt-oss only.
+        kwargs["max_completion_tokens"] = 1500
+        kwargs["reasoning_effort"] = "low"
+    else:
+        kwargs["max_completion_tokens"] = 500
+
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        max_completion_tokens=500,
         tools=[
             {
                 "type": "function",
@@ -131,6 +145,7 @@ def _call_groq(prompt: str) -> dict:
             }
         ],
         tool_choice={"type": "function", "function": {"name": _TOOL_NAME}},
+        **kwargs,
     )
 
     tool_call = response.choices[0].message.tool_calls[0]
