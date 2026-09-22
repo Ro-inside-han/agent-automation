@@ -1,0 +1,43 @@
+SOURCE: sample_notes.txt
+TOPIC: Agentic RAG Systems (placeholder study material — replace this file with your real subject notes)
+
+SECTION 1: What is RAG?
+Retrieval-Augmented Generation (RAG) is a technique where a language model's
+answer is grounded in documents retrieved from a knowledge base at query
+time, instead of relying only on the model's parametric memory. A RAG
+pipeline typically has two stages: (1) retrieval, which finds the most
+relevant chunks of text for a given query, and (2) generation, which asks an
+LLM to produce an answer using only those retrieved chunks as context.
+
+SECTION 2: What makes RAG "Agentic"?
+Agentic RAG adds a reasoning/planning layer around the basic retrieve-then-
+generate loop. Instead of a single fixed retrieval step, an agent decides
+how to break down the user's query, which retrieval calls to make, whether
+the retrieved evidence is sufficient, and how to combine multiple pieces of
+evidence into a final answer. Common agentic behaviors include:
+- Query decomposition: splitting a complex question into sub-questions.
+- Iterative retrieval: retrieving again if the first pass is insufficient.
+- Source citation: tracking which chunk/document supported which claim.
+- Self-verification: checking the draft answer against the retrieved
+  evidence before returning it.
+
+SECTION 3: Typical Agentic RAG Architecture
+1. Query understanding agent: parses the user query and produces a search
+   plan (keywords, sub-questions, or a rewritten query).
+2. Retriever: given the plan, searches the vector/embedding index (or a
+   simpler lexical index such as TF-IDF) over the chunked study material
+   and returns the top-k most relevant chunks with their source metadata.
+3. Synthesis agent: reads the retrieved chunks and composes a final answer,
+   citing which source/chunk each claim came from, and explicitly avoiding
+   claims not supported by the retrieved text.
+4. Output: the final answer plus a citation list mapping claims to sources.
+
+SECTION 4: Evaluation of a RAG system
+Good RAG systems are typically evaluated on:
+- Retrieval relevance: do the retrieved chunks actually contain the
+  information needed to answer the query?
+- Groundedness/faithfulness: does the generated answer only use facts
+  present in the retrieved chunks, without hallucinating extra details?
+- Answer completeness: does the final answer fully address the query?
+- Citation quality: can each claim in the answer be traced back to a
+  specific retrieved source?
