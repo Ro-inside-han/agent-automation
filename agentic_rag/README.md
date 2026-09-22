@@ -20,7 +20,9 @@ Input: faculty query
 Retrieval is lexical (TF-IDF), not an embedding vector DB, by design: it
 needs no extra API calls/keys, runs instantly, and is fully sufficient for a
 single-subject study-material corpus. Only the two agent steps (planning,
-synthesis) call the LLM, via OpenCode Zen's OpenAI-compatible API.
+synthesis) call the LLM, via OpenCode Zen's OpenAI-compatible API — no local
+install of the OpenCode CLI needed, just an API key over HTTPS. Works the
+same on any OS.
 
 ## Setup
 
